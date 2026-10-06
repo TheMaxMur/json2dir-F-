@@ -1,0 +1,4 @@
+.build/
+.tools/
+json2dir
+__pycache__/

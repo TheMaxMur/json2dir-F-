@@ -1,0 +1,46 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+. ./scripts/env
+command -v ocamlfind >/dev/null || {
+    echo 'OCaml/findlib is missing. Run make bootstrap or enter an OCaml environment.' >&2
+    exit 1
+}
+./scripts/verify
+mkdir -p .build/extracted .build/runtime
+"$FSTAR" --include src --include src/native --cache_dir .build/cache \
+    --cache_checked_modules --warn_error -274 --codegen OCaml \
+    --extract Json2dir --odir .build/extracted src/Json2dir.Main.fst
+
+# Recompile the official runtime sources with the user's OCaml packages.
+# This avoids ABI/version mismatches with a precompiled release library.
+# No application logic is handwritten or patched in these OCaml files.
+runtime="$FSTAR_HOME/lib/fstar/lib/app"
+for name in Prims FStar_UInt8 FStar_Char FStar_String FStar_List_Tot_Base \
+    FStar_List FStar_Pervasives_Native FStar_All FStar_Exn FStar_Exception FStar_IO
+do
+    cp "$runtime/$name.ml" .build/runtime/
+done
+for name in FStar_UInt16 FStar_UInt32 FStar_UInt64; do
+    cp "$runtime/ints/$name.ml" .build/runtime/
+done
+ocamlfind ocamlopt -w -8 -package batteries,stdint,zarith,ppx_deriving.show,ppx_deriving_yojson \
+    -linkpkg -I .build/runtime -I .build/extracted \
+    .build/runtime/Prims.ml \
+    .build/runtime/FStar_UInt8.ml \
+    .build/runtime/FStar_UInt16.ml \
+    .build/runtime/FStar_UInt32.ml \
+    .build/runtime/FStar_UInt64.ml \
+    .build/runtime/FStar_Char.ml \
+    .build/runtime/FStar_String.ml \
+    .build/runtime/FStar_List_Tot_Base.ml \
+    .build/runtime/FStar_List.ml \
+    .build/runtime/FStar_Pervasives_Native.ml \
+    .build/runtime/FStar_All.ml \
+    .build/runtime/FStar_Exn.ml \
+    .build/runtime/FStar_Exception.ml \
+    .build/runtime/FStar_IO.ml \
+    .build/extracted/Json2dir_Json.ml \
+    .build/extracted/Json2dir_Utf8.ml \
+    .build/extracted/Json2dir_Tree.ml \
+    .build/extracted/Json2dir_Main.ml -o json2dir

@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+. ./scripts/env
+mkdir -p .build/cache
+if [ ! -x "$FSTAR" ]; then
+    echo 'F* is missing. Run make bootstrap or set FSTAR_HOME.' >&2
+    exit 1
+fi
+# F* 2026.09.27 accepts one file per invocation with its default fly_deps mode.
+# Native modules must be named after their actual OCaml modules; warning 274
+# describes those deliberate names. no_prelude prevents namespace ambiguity.
+for file in \
+    src/native/Int.fsti src/native/Z.fsti src/native/Array.fsti \
+    src/native/Sys.fsti src/native/Char.fsti src/native/Seq.fsti \
+    src/native/String.fsti src/native/Float.fsti src/native/Buffer.fsti \
+    src/native/Stdlib.fsti src/native/Unix.fsti \
+    src/Json2dir.Json.fst src/Json2dir.Utf8.fst \
+    src/Json2dir.Tree.fst src/Json2dir.Main.fst
+do
+    "$FSTAR" --include src --include src/native --cache_dir .build/cache \
+        --cache_checked_modules --warn_error -274 "$file"
+done

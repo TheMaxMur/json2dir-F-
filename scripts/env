@@ -1,0 +1,9 @@
+# Shared build environment. Source from the repository root.
+FSTAR_HOME=${FSTAR_HOME:-"$PWD/.tools/fstar"}
+FSTAR=${FSTAR:-"$FSTAR_HOME/bin/fstar.exe"}
+if [ -d "$PWD/.tools/ocaml/bin" ]; then
+    PATH="$PWD/.tools/ocaml/bin:$PATH"
+    OCAMLPATH="$PWD/.tools/ocaml/lib/ocaml/5.3.0/site-lib${OCAMLPATH:+:$OCAMLPATH}"
+    export PATH OCAMLPATH
+fi
+export FSTAR_HOME FSTAR
