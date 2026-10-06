@@ -50,16 +50,59 @@ the build; Python is used only to test it.
 | File | Purpose |
 | --- | --- |
 | `src/Json2dir.Json.fst` | Total recursive-descent JSON parser, escape/surrogate handling, nesting limit |
+| `src/Json2dir.Spec.fst` | Pure executable name checker and JSON-to-entry classifier |
+| `src/Json2dir.Proofs.fst` | Checked safety and classification lemmas, ported from the Lean specification |
 | `src/Json2dir.Utf8.fst` | UTF-8 encoding and decoding, including NUL and non-BMP characters |
-| `src/Json2dir.Tree.fst` | Key validation, last duplicate wins, sorted traversal, materialization |
+| `src/Json2dir.Tree.fst` | Uses the verified name checker/classifier; handles ordering and materialization |
 | `src/Json2dir.Main.fst` | Stdin, UTF-8/number validation, errors and exit status |
 | `src/native/*.fsti` | Typed interfaces to existing OCaml standard library and Unix primitives |
 
 `make verify` discharges the F* verification conditions without `admit`,
 `--lax` or admitted SMT queries. The parser and its pure helpers are total.
 The OS/runtime interfaces are trusted declarations; filesystem operations
-and the CLI use the ML effect. This is a checked F* implementation, not a
-formal proof of the entire JSON grammar or of filesystem security.
+and the CLI use the ML effect.
+
+## Verified properties
+
+`src/Json2dir.Proofs.fst` ports every theorem in
+[tsalkenov/json2dir-lean's Spec.lean](https://github.com/tsalkenov/json2dir-lean/blob/1d307a44d04a690fdc142ae7b219ede83195dd27/Spec.lean)
+(commit `1d307a44d04a690fdc142ae7b219ede83195dd27`, WTFPL). The corresponding
+pure functions are implemented in `Json2dir.Spec` and called by the CLI:
+
+| Lean theorem | F* lemma |
+| --- | --- |
+| `interpretParts_safe` | `interpret_parts_safe` |
+| `parseName_safe` | `parse_name_safe` |
+| `parseName_noTraversal` | `parse_name_no_traversal` |
+| `classify_directory` | `classify_directory` |
+| `classify_file` | `classify_file` |
+| `classify_link` | `classify_link` |
+| `classify_script` | `classify_script` |
+| `classify_unknown_kind` | `classify_unknown_kind` |
+| `classify_empty_array` | `classify_empty_array` |
+| `classify_null` | `classify_null` |
+| `classify_bool` | `classify_bool` |
+| `classify_num` | `classify_num` |
+
+An accepted key normalizes to one nonempty component that is neither `.` nor
+`..` and contains no `/`. The F* version additionally rules out NUL.
+`parse_name_single_component` proves that the normalized component list is
+exactly that singleton and that the original key has neither a root/current
+directory prefix nor NUL. `valid_name_has_safe_component` connects the boolean
+check used by the CLI to the safe normalized result.
+
+The classification lemmas prove the directory/file/link/script conversion
+table, including preservation of children and payloads, and rejection of
+unknown tags, empty arrays, null, both booleans, and numbers. Null and booleans
+have distinct AST constructors so their statements match the Lean version.
+
+These are propositions over the actual pure runtime functions, checked by
+F* and Z3, not tests or assumed theorems. `make verify` checks all 14 lemmas;
+the proof module is not included in the executable. As in the Lean source,
+these proofs do not verify JSON parsing, OS operations, concurrent symlink
+safety, or full equivalence to Rust. The CLI retains the original key spelling
+for I/O to preserve Rust's behavior on trailing separators; the name lemmas
+describe its normalized component, not the raw key as a slash-free string.
 
 ## Compatibility
 

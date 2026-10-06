@@ -15,7 +15,8 @@ for file in \
     src/native/Sys.fsti src/native/Char.fsti src/native/Seq.fsti \
     src/native/String.fsti src/native/Float.fsti src/native/Buffer.fsti \
     src/native/Stdlib.fsti src/native/Unix.fsti \
-    src/Json2dir.Json.fst src/Json2dir.Utf8.fst \
+    src/Json2dir.Json.fst src/Json2dir.Spec.fst src/Json2dir.Proofs.fst \
+    src/Json2dir.Utf8.fst \
     src/Json2dir.Tree.fst src/Json2dir.Main.fst
 do
     "$FSTAR" --include src --include src/native --cache_dir .build/cache \

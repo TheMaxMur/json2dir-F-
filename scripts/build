@@ -41,6 +41,7 @@ ocamlfind ocamlopt -w -8 -package batteries,stdint,zarith,ppx_deriving.show,ppx_
     .build/runtime/FStar_Exception.ml \
     .build/runtime/FStar_IO.ml \
     .build/extracted/Json2dir_Json.ml \
+    .build/extracted/Json2dir_Spec.ml \
     .build/extracted/Json2dir_Utf8.ml \
     .build/extracted/Json2dir_Tree.ml \
     .build/extracted/Json2dir_Main.ml -o json2dir

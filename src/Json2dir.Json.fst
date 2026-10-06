@@ -11,7 +11,8 @@ type json =
   | Array : list json -> json
   | String : text -> json
   | Number : text -> json
-  | Scalar : json
+  | Null : json
+  | Bool : bool -> json
 
 type result (a:Type0) =
   | Ok : a -> result a
@@ -147,9 +148,9 @@ let rec value (fuel:nat) (depth:nat) (cs:text)
     (match parse_string (34::xs) with
      | Ok (s, rest) -> Ok (String s, rest)
      | Error e -> Error e)
-  | 116::rest -> scalar_literal [114;117;101] rest
-  | 102::rest -> scalar_literal [97;108;115;101] rest
-  | 110::rest -> scalar_literal [117;108;108] rest
+  | 116::rest -> scalar_literal (Bool true) [114;117;101] rest
+  | 102::rest -> scalar_literal (Bool false) [97;108;115;101] rest
+  | 110::rest -> scalar_literal Null [117;108;108] rest
   | c::xs ->
     if c = 45 || digit c then
       (match number (c::xs) with
@@ -160,10 +161,10 @@ let rec value (fuel:nat) (depth:nat) (cs:text)
        | Error e -> Error e)
     else Error "unexpected character"
 
-and scalar_literal (expected:text) (cs:text)
+and scalar_literal (v:json) (expected:text) (cs:text)
   : Tot (result (json & text)) (decreases 0) =
   match literal expected cs with
-  | Ok rest -> Ok (Scalar, rest)
+  | Ok rest -> Ok (v, rest)
   | Error e -> Error e
 
 and object_entries (fuel:nat) (depth:nat) (cs:text) (acc:list (text & json))

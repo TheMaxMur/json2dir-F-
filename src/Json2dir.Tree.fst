@@ -5,6 +5,7 @@ open FStar.Pervasives
 open FStar.Pervasives.Native
 open FStar.All
 open Json2dir.Json
+open Json2dir.Spec
 
 module L = FStar.List.Tot
 module S = FStar.String
@@ -13,36 +14,6 @@ module IO = FStar.IO
 exception TreeError of string
 
 let error (message:string) : ML unit = raise (TreeError message)
-
-// Rust Path::components ignores trailing separators and interior '.' parts.
-// Accept the same single normal component, but retain its spelling for I/O.
-let rec split_path (cs:text) (current:text) (acc:list text) : Tot (list text) =
-  match cs with
-  | [] -> L.rev ((L.rev current)::acc)
-  | 47::rest -> split_path rest [] ((L.rev current)::acc)
-  | c::rest -> split_path rest (c::current) acc
-
-let rec meaningful (parts:list text) : Tot (list text) =
-  match parts with
-  | [] -> []
-  | p::rest ->
-    if p = [] || p = [46] then meaningful rest else p::meaningful rest
-
-let valid_name (cs:text) : Tot bool =
-  match cs with
-  | [] | 47::_ | 46::_ ->
-    // A leading dot is regular except '.' itself and a leading './'.
-    if cs = [] || cs = [46] || cs = [46;46] then false
-    else (match cs with
-          | 47::_ | 46::47::_ -> false
-          | _ ->
-            match meaningful (split_path cs [] []) with
-            | [p] -> p <> [46;46] && not (L.mem 0 cs)
-            | _ -> false)
-  | _ ->
-    match meaningful (split_path cs [] []) with
-    | [p] -> p <> [46;46] && not (L.mem 0 cs)
-    | _ -> false
 
 let rec text_compare (a:text) (b:text) : Tot int =
   match a, b with
@@ -101,22 +72,21 @@ let rec materialize (parent:string) (entries:list (text & json)) : ML unit =
     if not (valid_name key) then error ("the key " ^ name ^ " under " ^ parent ^ " must have exactly one regular path component");
     let path = parent ^ "/" ^ name in
     (try Unix.unlink path with _ -> ());
-    (match v with
-     | Object children -> make_directory path; materialize path (ordered children)
-     | String content -> write "regular file" path content
-     | Array [String kind; String payload] ->
-       if kind = [108;105;110;107] then
-         let target = Json2dir.Utf8.encode payload in
-         attempt "symlink" path (fun () -> Unix.symlink target path)
-       else if kind = [115;99;114;105;112;116] then (
-         write "script" path payload;
-         try
-           let mode = (Unix.stat path).Unix.st_perm in
-           Unix.chmod path (Int.logor mode (Z.to_int 0o111))
-         with e -> error ("couldn't make the script executable at " ^ path ^ ": " ^ describe e))
-       else error ("expected a JSON array's first element to be either \"link\" or \"script\" while at " ^ path)
-     | Array _ -> error ("expected a JSON array to be of the form [type, payload] while at " ^ path)
-     | Number _ | Scalar -> error ("expected a JSON value to be an object, an array, or a string while at " ^ path));
+    (match classify v with
+     | EntryOk (Directory children) -> make_directory path; materialize path (ordered children)
+     | EntryOk (File content) -> write "regular file" path content
+     | EntryOk (Link payload) ->
+       let target = Json2dir.Utf8.encode payload in
+       attempt "symlink" path (fun () -> Unix.symlink target path)
+     | EntryOk (Script payload) ->
+       write "script" path payload;
+       (try
+          let mode = (Unix.stat path).Unix.st_perm in
+          Unix.chmod path (Int.logor mode (Z.to_int 0o111))
+        with e -> error ("couldn't make the script executable at " ^ path ^ ": " ^ describe e))
+     | EntryError InvalidArrayKind -> error ("expected a JSON array's first element to be either \"link\" or \"script\" while at " ^ path)
+     | EntryError InvalidArray -> error ("expected a JSON array to be of the form [type, payload] while at " ^ path)
+     | EntryError InvalidPart -> error ("expected a JSON value to be an object, an array, or a string while at " ^ path));
     materialize parent rest
 
 let run (v:json) : ML unit =
